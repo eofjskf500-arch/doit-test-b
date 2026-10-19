@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>배건우 할일</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 40px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      background: orange;
+      color: #222;
+    }
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    }
+    h1 { margin: 0 0 4px; font-size: 24px; }
+    .date { color: #888; font-size: 14px; margin-bottom: 20px; }
+    #form { display: flex; gap: 8px; margin-bottom: 16px; }
+    .inline-form { display: flex; gap: 8px; margin: 0; }
+    .edit-form { flex: 1; align-items: center; }
+    input[type="text"] {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 4px;
+      border-bottom: 1px solid #eee;
+    }
+    li span { flex: 1; word-break: break-all; }
+    li .edit-input {
+      flex: 1;
+      padding: 6px 8px;
+      font-size: 15px;
+    }
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .edit { background: #64748b; }
+    .edit:hover { background: #475569; }
+    .delete { background: #e11d48; }
+    .delete:hover { background: #be123c; }
+    .empty { text-align: center; color: #aaa; padding: 20px 0; }
+    .error { color: #e11d48; font-size: 13px; margin: -8px 0 12px; }
+    .count { margin-top: 12px; font-size: 13px; color: #888; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>배건우 할일</h1>
+    <div class="date" id="date"></div>
+
+    <form id="form" action="/todo" method="post">
+      <input type="text" id="input" name="text" placeholder="할일을 입력하세요" autocomplete="off" required>
+      <button type="submit">추가</button>
+    </form>
+    <div class="error" id="error" hidden></div>
+
+    <ul id="list"></ul>
+    <div class="count" id="count"></div>
+    <div>
+      <small>※ B Class Middle Exam</small>
+    </div>
+  </div>
+
+  <script>
+    const list = document.getElementById('list');
+    const count = document.getElementById('count');
+    const errorEl = document.getElementById('error');
+
+    document.getElementById('date').textContent = new Date().toLocaleDateString('ko-KR', {
+      year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+    });
+
+    // method-override용 form 생성: POST {action}?_method={method}
+    function createForm(action, method, className) {
+      const f = document.createElement('form');
+      f.className = className || 'inline-form';
+      f.method = 'post';
+      f.action = method === 'POST' ? action : `${action}?_method=${method}`;
+      return f;
+    }
+
+    function render(todos) {
+      list.innerHTML = '';
+
+      if (todos.length === 0) {
+        list.innerHTML = '<li class="empty">오늘 할일이 없습니다</li>';
+      }
+
+      todos.forEach((todo) => {
+        const li = document.createElement('li');
+
+        const span = document.createElement('span');
+        span.textContent = todo.text;
+
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'btn-sm edit';
+        edit.textContent = '수정';
+        edit.addEventListener('click', () => startEdit(li, todo, todos));
+
+        // 삭제: DELETE /todo/[id]
+        const delForm = createForm(`/todo/${todo.id}`, 'DELETE');
+        const del = document.createElement('button');
+        del.type = 'submit';
+        del.className = 'btn-sm delete';
+        del.textContent = '삭제';
+        delForm.appendChild(del);
+
+        li.append(span, edit, delForm);
+        list.appendChild(li);
+      });
+
+      count.textContent = todos.length ? `전체 ${todos.length}` : '';
+    }
+
+    // 수정: PUT /todo/[id]  (text=...)
+    function startEdit(li, todo, todos) {
+      const editForm = createForm(`/todo/${todo.id}`, 'PUT', 'inline-form edit-form');
+
+      const editInput = document.createElement('input');
+      editInput.type = 'text';
+      editInput.name = 'text';
+      editInput.className = 'edit-input';
+      editInput.value = todo.text;
+      editInput.required = true;
+      editInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') render(todos);
+      });
+
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'submit';
+      saveBtn.className = 'btn-sm';
+      saveBtn.textContent = '저장';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn-sm edit';
+      cancelBtn.textContent = '취소';
+      cancelBtn.addEventListener('click', () => render(todos));
+
+      editForm.append(editInput, saveBtn, cancelBtn);
+      li.replaceChildren(editForm);
+      editInput.focus();
+    }
+
+    // 목록 조회: GET /todo  → [{ id, text }, ...]
+    fetch('/todo')
+      .then((res) => {
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return res.json();
+      })
+      .then(render)
+      .catch((err) => {
+        errorEl.textContent = `목록 불러오기 실패: ${err.message}`;
+        errorEl.hidden = false;
+        render([]);
+      });
+  </script>
+</body>
+</html>
